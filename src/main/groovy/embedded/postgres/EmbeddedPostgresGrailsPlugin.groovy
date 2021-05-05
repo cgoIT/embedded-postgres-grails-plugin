@@ -1,13 +1,14 @@
 package embedded.postgres
 
-import com.opentable.db.postgres.embedded.EmbeddedPostgres
+import grails.config.Config
 import grails.plugins.Plugin
 import groovy.util.logging.Slf4j
+import io.zonky.test.db.postgres.embedded.EmbeddedPostgres
 import org.springframework.util.SocketUtils
 
 @Slf4j
 class EmbeddedPostgresGrailsPlugin extends Plugin {
-    def grailsVersion   = "3.2.10 > *"
+    def grailsVersion   = "3.3.10 > *"
     def title           = "Embedded Postgres"
     def author          = "Alexey Chentsov"
     def authorEmail     = "alche8411@gmail.com"
@@ -20,50 +21,60 @@ class EmbeddedPostgresGrailsPlugin extends Plugin {
     def pluginExcludes  = []
     def developers      = [ [name: 'Alexey Chentsov'] ]
     def dependsOn = [dataSource: grailsVersion]
-    def loadBefore = ['dataSource']
+    def loadBefore = ['dataSource', 'database-migration']
     def scopes = [excludes:'war']
 
     Closure doWithSpring() { {->
         def config = grailsApplication.config
         if (config.dataSource.embeddedPostgres) {
             def dataSourceName = "dataSource"
-            def opentableDb = startEmbeddedPostgres(config.dataSource, dataSourceName)
-            embeddedPostgres(EmbeddedPostgresHolder,opentableDb)
+            def ep = startEmbeddedPostgres(config.dataSource, dataSourceName)
+            embeddedPostgres(EmbeddedPostgresHolder, ep)
         }
-        for(def entry: config.dataSources) {
+        for (def entry: config.dataSources) {
             def dataSourceName = "dataSource_${entry.key}"
             def embeddedName = "embeddedPostgres_${entry.key}"
             if (entry.value.embeddedPostgres) {
-                def opentableDb = startEmbeddedPostgres(entry.value, dataSourceName)
-                "$embeddedName"(EmbeddedPostgresHolder, opentableDb)
+                def ep = startEmbeddedPostgres(entry.value, dataSourceName)
+                "$embeddedName"(EmbeddedPostgresHolder, ep)
             }
         }
     } }
 
-    private def startEmbeddedPostgres(sourceConfig, dataSourceName){
+    private static def startEmbeddedPostgres(sourceConfig, dataSourceName){
 
-        if(!sourceConfig.embeddedPort){
-            sourceConfig.embeddedPort=SocketUtils.findAvailableTcpPort()
+        if (!sourceConfig.embeddedPort) {
+            sourceConfig.embeddedPort = SocketUtils.findAvailableTcpPort()
             log.debug("Embedded Postgres will use DEFAULT port: {}", sourceConfig.embeddedPort)
         }
 
         log.info("Embedded Postgres plugin is starting under ${dataSourceName} bean on ${sourceConfig.embeddedPort} port...")
 
-        if(!sourceConfig.url) {
+        if (!sourceConfig.url) {
             sourceConfig.url="jdbc:postgresql://localhost:${sourceConfig.embeddedPort}/postgres?autoReconnect=true&characterEncoding=UTF-8"
             log.debug("Embedded Postgres will use DEFAULT url: {}", sourceConfig.url)
         }
 
-        if(!sourceConfig.username)
+        if (!sourceConfig.username) {
             sourceConfig.username='postgres'
+        }
 
-        if(!sourceConfig.password)
+        if (!sourceConfig.password) {
             sourceConfig.password='postgres'
+        }
 
         def builder = EmbeddedPostgres.builder()
-        if(sourceConfig.embeddedPort) {
-            builder.setPort(sourceConfig.embeddedPort.toInteger())
+        if (sourceConfig.embeddedPort) {
+            builder.setPort(sourceConfig.embeddedPort as int)
         }
+
+        if (sourceConfig?.locale?.config) {
+            builder.setLocaleConfig('locale', sourceConfig?.locale?.config as String)
+        } else {
+            builder.setLocaleConfig('locale', 'de_DE')
+        }
+
+        builder.setCleanDataDirectory(true)
 
         builder.start()
     }

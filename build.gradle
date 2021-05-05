@@ -6,16 +6,19 @@ buildscript {
     }
     dependencies {
         classpath "org.grails:grails-gradle-plugin:$grailsVersion"
+        classpath "com.bertramlabs.plugins:asset-pipeline-gradle:3.0.10"
     }
 }
 
-version "1.1.2"
+version "1.1.2-patched"
 group "org.grails.plugins"
 
 apply plugin:"eclipse"
 apply plugin:"idea"
 apply plugin:"org.grails.grails-plugin"
 apply plugin:"org.grails.grails-plugin-publish"
+apply plugin:"asset-pipeline"
+apply plugin:"maven-publish"
 
 repositories {
     mavenLocal()
@@ -26,6 +29,9 @@ repositories {
 ext {
     grailsVersion = project.grailsVersion
     gradleWrapperVersion = project.gradleWrapperVersion
+    nexusBase = "https://nexus.cgo-it.de/repository"
+    nexusUsername = System.getenv("NEXUS_USER") ?: rootProject.cgoitNexusUsername
+    nexusPassword = System.getenv("NEXUS_PASSWORD") ?: rootProject.cgoitNexusPassword
 }
 
 dependencyManagement {
@@ -40,23 +46,46 @@ dependencies {
     compile "org.springframework.boot:spring-boot-autoconfigure"
     compile "org.grails:grails-core"
     compile "org.grails:grails-logging"
-    compile "com.opentable.components:otj-pg-embedded:0.13.0"
+    compile "io.zonky.test:embedded-postgres:1.2.8"
 
     testCompile "org.grails:grails-plugin-datasource"
     testCompile "org.grails:grails-testing-support:1.1.4"
     testCompile "com.h2database:h2"
 }
 
-bootRun {
-    jvmArgs('-Dspring.output.ansi.enabled=always')
-    addResources = true
-    String springProfilesActive = 'spring.profiles.active'
-    systemProperty springProfilesActive, System.getProperty(springProfilesActive)
-}
+bootRun.enabled = false
 // enable if you wish to package this plugin as a standalone application
 bootRepackage.enabled = false
+
+publishing.repositories {
+    maven {
+        credentials {
+            username "${nexusUsername}"
+            password "${nexusPassword}"
+        }
+
+        def releasesRepoUrl = "$nexusBase/grails-plugins"
+        def snapshotsRepoUrl = "$nexusBase/grails-plugins-snapshots"
+        url = "SNAPSHOT" in project.version ? snapshotsRepoUrl : releasesRepoUrl
+    }
+}
+
+publishing.publications {
+    embeddedpostgres(MavenPublication) {
+        afterEvaluate {
+            artifactId = project.name
+            version project.version
+            from components.java
+            artifact sourcesJar
+            pom {
+                description = 'Plugin allows to use embedded postgres in application.'
+            }
+        }
+    }
+}
+
 grailsPublish {
-    githubSlug = 'Relaximus/embedded-postgres-grails-plugin'
+    githubSlug = 'cgoIT/embedded-postgres-grails-plugin'
     license {
         name = 'Apache-2.0'
     }
@@ -64,3 +93,9 @@ grailsPublish {
     desc = "Plugin allows to use embedded postgres in application."
     developers = [relaximus:"Alexey Chentsov"]
 }
+
+assets {
+    packagePlugin = true
+}
+
+publish.dependsOn = [sourcesJar, build]

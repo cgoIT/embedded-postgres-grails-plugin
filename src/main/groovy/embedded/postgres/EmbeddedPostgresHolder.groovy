@@ -1,7 +1,7 @@
 package embedded.postgres
 
-import com.opentable.db.postgres.embedded.EmbeddedPostgres
 import groovy.util.logging.Slf4j
+import io.zonky.test.db.postgres.embedded.EmbeddedPostgres
 import org.springframework.beans.factory.DisposableBean
 
 @Slf4j
